@@ -295,3 +295,218 @@ button, input, select, .subtitle-scroll, .feedback-content, .modal-body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+/* ===== 历史报告 ===== */
+.panel-right-footer {
+  padding: 8px 0 0;
+  border-top: 1px solid #1a1a1a;
+  flex-shrink: 0;
+}
+
+.btn-history {
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.btn-history:hover {
+  background: #2a2a2a;
+  color: #fff;
+  border-color: #E5007E;
+}
+
+/* 历史报告列表 */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #1a1a1a;
+  border: 1px solid #222;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-item:hover {
+  border-color: #E5007E;
+  background: #222;
+}
+
+.history-item-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item-date {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.history-item-preview {
+  font-size: 13px;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-item-stats {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #666;
+}
+
+.history-item-stats span {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.history-item-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.history-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.history-status.completed {
+  background: rgba(105, 219, 124, 0.15);
+  color: #69db7c;
+}
+
+.history-status.generating {
+  background: rgba(255, 169, 77, 0.15);
+  color: #ffa94d;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.history-status.failed {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+}
+
+.history-btn-view {
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: transparent;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-btn-view:hover {
+  border-color: #E5007E;
+  color: #fff;
+}
+
+.history-btn-delete {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-btn-delete:hover {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.history-empty {
+  text-align: center;
+  color: #666;
+  padding: 60px 20px;
+  font-size: 14px;
+}
+
+/* 历史报告详情 */
+.history-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #222;
+}
+
+.history-btn-back {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: transparent;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-btn-back:hover {
+  border-color: #E5007E;
+  color: #fff;
+}
+
+.history-detail-date {
+  font-size: 12px;
+  color: #888;
+}
+
+.history-detail-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #1a1a1a;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.history-detail-stats span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.history-detail-report {
+  font-size: 14px;
+  line-height: 1.9;
+  color: #ddd;
+}
+
+.history-detail-report h2 { color: #E5007E; margin-top: 20px; margin-bottom: 8px; font-size: 16px; }
+.history-detail-report h3 { color: #fff; margin-top: 14px; font-size: 14px; }
+.history-detail-report blockquote { border-left: 3px solid #E5007E; padding-left: 12px; color: #999; margin: 8px 0; }
+.history-detail-report code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; color: #E5007E; font-size: 13px; }
+.history-detail-report table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.history-detail-report th, .history-detail-report td { border: 1px solid #333; padding: 6px 10px; text-align: left; font-size: 13px; }
+.history-detail-report th { background: #1a1a1a; color: #E5007E; }

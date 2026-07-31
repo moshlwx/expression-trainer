@@ -13,9 +13,11 @@ class ExpressionTrainer {
     this.stats = { fillers: 0, hedges: 0, vagueWords: 0, totalWords: 0, duration: 0 };
     this.lastFeedbackText = '';
     this.lastReport = '';
+    this.currentReportId = null; // 异步报告ID
 
     this.initElements();
     this.bindEvents();
+    this.setupReportListener();
   }
 
   initElements() {
@@ -45,6 +47,13 @@ class ExpressionTrainer {
     this.statHedges = document.getElementById('stat-hedges');
     this.statVague = document.getElementById('stat-vague');
     this.statDensity = document.getElementById('stat-density');
+    // 历史报告
+    this.btnHistory = document.getElementById('btn-history');
+    this.historyModal = document.getElementById('history-modal');
+    this.historyBody = document.getElementById('history-body');
+    this.historyList = document.getElementById('history-list');
+    this.historyDetail = document.getElementById('history-detail');
+    this.btnCloseHistory = document.getElementById('btn-close-history');
   }
 
   bindEvents() {
@@ -69,6 +78,9 @@ class ExpressionTrainer {
     this.btnCopyText.addEventListener('click', () => this.copyOriginalText());
     this.btnSaveText.addEventListener('click', () => this.saveOriginalText());
     this.btnClear.addEventListener('click', () => this.clearAll());
+    // 历史报告
+    this.btnHistory.addEventListener('click', () => this.showReportHistory());
+    this.btnCloseHistory.addEventListener('click', () => this.historyModal.classList.add('hidden'));
   }
 
   // ===== 录制控制 =====
@@ -306,64 +318,43 @@ class ExpressionTrainer {
 
   // ===== 报告 =====
 
+  setupReportListener() {
+    window.api.onReportGenerated((data) => {
+      if (data.status === 'completed') {
+        this.lastReport = data.report;
+        // 如果报告弹窗当前是打开状态且显示的是该报告的"生成中"状态，则自动填充
+        if (!this.reportModal.classList.contains('hidden') && this.currentReportId === data.id) {
+          this.renderReport(data.report);
+        }
+        this.addFeedbackItem('✅ 报告生成完成', 'good');
+      } else if (data.status === 'failed') {
+        if (!this.reportModal.classList.contains('hidden') && this.currentReportId === data.id) {
+          this.reportBody.innerHTML = `<p style="color:#ff6b6b;">生成失败: ${data.error}</p>`;
+        }
+        this.addFeedbackItem(`❌ 报告生成失败: ${data.error}`, 'hedge');
+      }
+    });
+  }
+
   async generateReport() {
-    this.reportBody.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">正在生成报告...</p>';
+    // 异步启动报告生成
+    this.reportBody.innerHTML = `
+      <div style="text-align:center;padding:40px;">
+        <div style="font-size:24px;margin-bottom:12px;">⏳</div>
+        <p style="color:#ffa94d;">正在后台生成报告...</p>
+        <p style="color:#666;font-size:12px;margin-top:8px;">生成完成后会自动通知你，可先关闭此窗口继续训练</p>
+      </div>`;
     this.reportModal.classList.remove('hidden');
 
-    const result = await window.api.getFinalReport({
+    const result = await window.api.requestReportAsync({
       fullText: this.fullText,
       stats: this.stats
     });
 
     if (result.success) {
-      this.lastReport = result.report;
-      this.renderReport(result.report);
+      this.currentReportId = result.reportId;
     } else {
-      this.reportBody.innerHTML = `<p style="color:#ff6b6b;">生成失败: ${result.error}</p>`;
-    }
-  }
-
-  renderReport(report) {
-    let html = report
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-      .replace(/\|(.+)\|/g, (match) => {
-        // 简单表格支持
-        return match;
-      })
-      .replace(/\n/g, '<br>');
-
-    this.reportBody.innerHTML = `
-      <div style="text-align:right;margin-bottom:12px;">
-        <button id="btn-save-report" style="background:#E5007E;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;">💾 保存为 Markdown</button>
-      </div>
-      ${html}
-    `;
-
-    document.getElementById('btn-save-report').addEventListener('click', () => this.saveReport());
-  }
-
-  async saveReport() {
-    if (!this.lastReport) return;
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
-    const timeStr = now.toTimeString().slice(0, 5).replace(':', '');
-    const markdown = `# 表达训练报告\n\n**日期**: ${dateStr}  \n**时长**: ${this.stats.duration}秒  \n**总字数**: ${this.stats.totalWords}  \n\n---\n\n## 完整原文\n\n${this.fullText}\n\n---\n\n${this.lastReport}`;
-    const filename = `表达训练-${dateStr}-${timeStr}.md`;
-
-    try {
-      const result = await window.api.saveFile(markdown, filename);
-      if (result.success) {
-        const btn = document.getElementById('btn-save-report');
-        btn.textContent = '✓ 已保存';
-        btn.style.background = '#333';
-        setTimeout(() => { btn.textContent = '💾 保存为 Markdown'; btn.style.background = '#E5007E'; }, 2000);
-      }
-    } catch (e) {
-      alert('保存失败: ' + e.message);
+      this.reportBody.innerHTML = `<p style="color:#ff6b6b;">启动生成失败: ${result.error}</p>`;
     }
   }
 
@@ -487,6 +478,194 @@ class ExpressionTrainer {
 
     // 请求AI语境化反馈
     this.requestRealtimeFeedback();
+  }
+
+  // ===== 历史报告 =====
+
+  async showReportHistory() {
+    this.historyDetail.classList.add('hidden');
+    this.historyList.classList.remove('hidden');
+    this.historyModal.classList.remove('hidden');
+
+    const reports = await window.api.getReportHistory();
+    this.renderHistoryList(reports);
+  }
+
+  renderHistoryList(reports) {
+    if (!reports || reports.length === 0) {
+      this.historyList.innerHTML = '<div class="history-empty">暂无历史报告\n完成一次训练并生成报告后，这里会显示记录</div>';
+      return;
+    }
+
+    this.historyList.innerHTML = reports.map(r => {
+      const statusLabel = r.status === 'completed' ? '✅ 已完成' :
+                          r.status === 'generating' ? '⏳ 生成中' :
+                          '❌ 失败';
+      const statusClass = r.status === 'completed' ? 'completed' :
+                          r.status === 'generating' ? 'generating' : 'failed';
+
+      const statsHtml = r.stats ? `
+        <div class="history-item-stats">
+          <span>🔴 ${r.stats.fillers || 0}</span>
+          <span>🟡 ${r.stats.hedges || 0}</span>
+          <span>🟠 ${r.stats.vagueWords || 0}</span>
+          <span>🟢 ${r.stats.totalWords || 0}字</span>
+          ${r.stats.duration ? `<span>⏱️ ${Math.floor(r.stats.duration / 60)}分${r.stats.duration % 60}秒</span>` : ''}
+        </div>` : '';
+
+      const deleteBtn = r.status !== 'generating'
+        ? `<button class="history-btn-delete" data-id="${r.id}" title="删除">🗑️</button>`
+        : '';
+
+      return `
+        <div class="history-item" data-id="${r.id}">
+          <div class="history-item-left">
+            <div class="history-item-date">${r.date || '未知时间'}</div>
+            <div class="history-item-preview">${r.textPreview || '(无文本)'}</div>
+            ${statsHtml}
+          </div>
+          <div class="history-item-right">
+            <span class="history-status ${statusClass}">${statusLabel}</span>
+            ${r.status === 'completed' ? `<button class="history-btn-view" data-id="${r.id}">查看</button>` : ''}
+            ${deleteBtn}
+          </div>
+        </div>`;
+    }).join('');
+
+    // 绑定事件
+    this.historyList.querySelectorAll('.history-btn-view').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.viewReportDetail(btn.dataset.id);
+      });
+    });
+    this.historyList.querySelectorAll('.history-btn-delete').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.deleteReportItem(btn.dataset.id);
+      });
+    });
+    this.historyList.querySelectorAll('.history-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const id = item.dataset.id;
+        const report = reports.find(r => r.id === id);
+        if (report && report.status === 'completed') {
+          this.viewReportDetail(id);
+        }
+      });
+    });
+  }
+
+  async viewReportDetail(reportId) {
+    const report = await window.api.getReportDetail(reportId);
+    if (!report || report.status !== 'completed') return;
+
+    this.historyList.classList.add('hidden');
+    this.historyDetail.classList.remove('hidden');
+
+    const statsHtml = report.stats ? `
+      <div class="history-detail-stats">
+        <span>🔴 填充词: ${report.stats.fillers || 0}</span>
+        <span>🟡 犹豫词: ${report.stats.hedges || 0}</span>
+        <span>🟠 笼统词: ${report.stats.vagueWords || 0}</span>
+        <span>🟢 总字数: ${report.stats.totalWords || 0}</span>
+        ${report.stats.duration ? `<span>⏱️ 时长: ${Math.floor(report.stats.duration / 60)}分${report.stats.duration % 60}秒</span>` : ''}
+        ${report.stats.totalWords ? `<span>📊 密度: ${((report.stats.totalWords - (report.stats.fillers || 0) - (report.stats.hedges || 0)) / report.stats.totalWords * 100).toFixed(0)}%</span>` : ''}
+      </div>` : '';
+
+    this.historyDetail.innerHTML = `
+      <div class="history-detail-header">
+        <button class="history-btn-back" id="history-btn-back">← 返回列表</button>
+        <span class="history-detail-date">${report.date || '未知时间'}</span>
+      </div>
+      ${statsHtml}
+      <div class="history-detail-report">${this.renderReportContent(report.report || '')}</div>`;
+
+    document.getElementById('history-btn-back').addEventListener('click', () => {
+      this.showReportHistory();
+    });
+  }
+
+  async deleteReportItem(reportId) {
+    const result = await window.api.deleteReport(reportId);
+    if (result.success) {
+      this.addFeedbackItem('🗑️ 已删除一条历史报告', 'good');
+      // 刷新列表
+      const reports = await window.api.getReportHistory();
+      this.renderHistoryList(reports);
+    }
+  }
+
+  renderReportContent(reportText) {
+    // 将 Markdown 格式的报告转换为 HTML
+    let html = reportText
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      // 代码块
+      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+      // 行内代码
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // 标题
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+      // 加粗
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      // 引用
+      .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+      // 无序列表
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+      // 段落
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>');
+
+    // 表格处理：将连续的 |...| 行包裹在 <table> 中
+    html = html.replace(/((?:<br>)?\|[^|]+\|<br>(?:\|[^|]+\|<br>)*)/g, (match) => {
+      const rows = match.split('<br>').filter(r => r.trim());
+      const isSep = rows.some(r => /^\|[\s:|-]+\|$/.test(r));
+      const tableRows = rows.map(r => {
+        const cells = r.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        if (cells.every(c => /^:?-+:?$/.test(c))) return '';
+        return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`;
+      }).filter(Boolean).join('');
+      return tableRows ? `<table>${tableRows}</table>` : match;
+    });
+
+    return `<p>${html}</p>`;
+  }
+
+  // 重写 renderReport 使用 renderReportContent
+  renderReport(reportText) {
+    this.reportBody.innerHTML = `
+      <div style="text-align:right;margin-bottom:12px;">
+        <button id="btn-save-report" style="background:#E5007E;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;">💾 保存为 Markdown</button>
+      </div>
+      ${this.renderReportContent(reportText)}`;
+
+    document.getElementById('btn-save-report').addEventListener('click', () => this.saveReportToFile());
+  }
+
+  async saveReportToFile() {
+    if (!this.lastReport) return;
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = now.toTimeString().slice(0, 5).replace(':', '');
+    const markdown = `# 表达训练报告\n\n**日期**: ${dateStr}  \n**时长**: ${this.stats.duration}秒  \n**总字数**: ${this.stats.totalWords}  \n\n---\n\n## 完整原文\n\n${this.fullText}\n\n---\n\n${this.lastReport}`;
+    const filename = `表达训练-${dateStr}-${timeStr}.md`;
+
+    try {
+      const result = await window.api.saveFile(markdown, filename);
+      if (result.success) {
+        const btn = document.getElementById('btn-save-report');
+        btn.textContent = '✓ 已保存';
+        btn.style.background = '#333';
+        setTimeout(() => { btn.textContent = '💾 保存为 Markdown'; btn.style.background = '#E5007E'; }, 2000);
+      }
+    } catch (e) {
+      alert('保存失败: ' + e.message);
+    }
   }
 }
 
