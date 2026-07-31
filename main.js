@@ -13,6 +13,53 @@ let settingsWindow;
 let promptEditorWindow;
 let asrReady = false;
 
+// ===== 报告持久化 =====
+function getReportsDir() {
+  return path.join(app.getPath('userData'), 'reports');
+}
+
+function getReportFilePath(id) {
+  return path.join(getReportsDir(), `${id}.json`);
+}
+
+function loadReports() {
+  const dir = getReportsDir();
+  if (!fs.existsSync(dir)) return [];
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  const reports = files.map(f => {
+    try {
+      const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8'));
+      return data;
+    } catch { return null; }
+  }).filter(Boolean);
+  // 按时间倒序排列
+  reports.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return reports;
+}
+
+function saveReport(report) {
+  const dir = getReportsDir();
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const filePath = getReportFilePath(report.id);
+  fs.writeFileSync(filePath, JSON.stringify(report, null, 2), 'utf-8');
+}
+
+function deleteReportFile(id) {
+  const filePath = getReportFilePath(id);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+    return true;
+  }
+  return false;
+}
+
+function generateReportId() {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
+  return `report-${dateStr}-${timeStr}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
 // Custom prompt 文件路径
 function getCustomPromptPath() {
   return path.join(app.getPath('userData'), 'custom-prompt.json');
@@ -332,4 +379,76 @@ ipcMain.handle('get-final-report', async (event, { fullText, stats }) => {
   } catch (error) {
     return { success: false, error: error.message };
   }
+});
+
+// ===== 异步报告生成 =====
+ipcMain.handle('request-report-async', async (event, { fullText, stats }) => {
+  const settings = loadSettings();
+  const providerConfig = getCurrentProviderSettings(settings);
+  const customPrompt = loadCustomPrompt();
+
+  // 立即返回一个 reportId，后台继续生成
+  const reportId = generateReportId();
+  const reportMeta = {
+    id: reportId,
+    createdAt: Date.now(),
+    date: new Date().toLocaleString('zh-CN'),
+    stats: { ...stats },
+    textPreview: fullText.slice(0, 100) + (fullText.length > 100 ? '...' : ''),
+    status: 'generating'
+  };
+  // 先保存元数据
+  saveReport(reportMeta);
+
+  // 异步生成，完成后推送
+  (async () => {
+    try {
+      const reportContent = await sendReport(fullText, stats, { ...settings, ...providerConfig }, customPrompt);
+      // 更新报告记录
+      const report = {
+        ...reportMeta,
+        status: 'completed',
+        report: reportContent,
+        fullText
+      };
+      saveReport(report);
+      // 推送给渲染进程
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('report-generated', { id: reportId, status: 'completed', report: reportContent });
+      }
+    } catch (error) {
+      // 更新为失败状态
+      const failedReport = {
+        ...reportMeta,
+        status: 'failed',
+        error: error.message
+      };
+      saveReport(failedReport);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('report-generated', { id: reportId, status: 'failed', error: error.message });
+      }
+    }
+  })();
+
+  return { success: true, reportId };
+});
+
+// 获取报告历史列表
+ipcMain.handle('get-report-history', async () => {
+  return loadReports();
+});
+
+// 获取单条报告详情
+ipcMain.handle('get-report-detail', async (event, reportId) => {
+  const filePath = getReportFilePath(reportId);
+  if (fs.existsSync(filePath)) {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  }
+  return null;
+});
+
+// 删除报告
+ipcMain.handle('delete-report', async (event, reportId) => {
+  const deleted = deleteReportFile(reportId);
+  return { success: deleted };
 });

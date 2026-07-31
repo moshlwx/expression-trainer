@@ -33,4 +33,18 @@ contextBridge.exposeInMainWorld('api', {
 
   // 文件保存
   saveFile: (content, filename) => ipcRenderer.invoke('save-file', content, filename),
+
+  // 异步报告生成
+  requestReportAsync: (data) => ipcRenderer.invoke('request-report-async', data),
+  onReportGenerated: (callback) => {
+    ipcRenderer.on('report-generated', (event, data) => callback(data));
+  },
+  removeReportListener: () => {
+    ipcRenderer.removeAllListeners('report-generated');
+  },
+
+  // 历史报告
+  getReportHistory: () => ipcRenderer.invoke('get-report-history'),
+  getReportDetail: (id) => ipcRenderer.invoke('get-report-detail', id),
+  deleteReport: (id) => ipcRenderer.invoke('delete-report', id),
 });

@@ -95,6 +95,9 @@
       <div id="feedback-content" class="feedback-content">
         <!-- 实时反馈内容 -->
       </div>
+      <div class="panel-right-footer">
+        <button id="btn-history" class="btn-sm btn-history" title="查看历史报告">📜 历史报告</button>
+      </div>
     </aside>
   </div>
 
@@ -138,6 +141,22 @@
         </div>
       </div>
       <div id="report-body" class="modal-body">
+      </div>
+    </div>
+  </div>
+
+  <!-- 历史报告弹窗 -->
+  <div id="history-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📜 历史报告</h2>
+        <div class="modal-header-actions">
+          <button id="btn-close-history" class="btn-close">×</button>
+        </div>
+      </div>
+      <div id="history-body" class="modal-body">
+        <div id="history-list" class="history-list"></div>
+        <div id="history-detail" class="history-detail hidden"></div>
       </div>
     </div>
   </div>
