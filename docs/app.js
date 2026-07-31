@@ -782,6 +782,7 @@ class ExpressionTrainer {
     // Report modal
     document.getElementById('btn-close-report').addEventListener('click', () => this.reportModal.classList.add('hidden'));
     document.getElementById('btn-copy-report').addEventListener('click', () => this.copyReport());
+    document.getElementById('btn-download-report-header').addEventListener('click', () => this.downloadReport());
 
     // Welcome
     document.getElementById('btn-welcome-start').addEventListener('click', () => {
@@ -1421,14 +1422,7 @@ class ExpressionTrainer {
   }
 
   renderReport(report) {
-    this.reportBody.innerHTML = `
-      <div style="text-align:right;margin-bottom:12px;">
-        <button id="btn-download-report" style="background:#E5007E;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;">💾 下载 Markdown</button>
-      </div>
-      ${this.renderReportContent(report)}
-    `;
-
-    document.getElementById('btn-download-report').addEventListener('click', () => this.downloadReport());
+    this.reportBody.innerHTML = this.renderReportContent(report);
   }
 
   downloadReport() {
@@ -1447,18 +1441,17 @@ class ExpressionTrainer {
     a.click();
     URL.revokeObjectURL(url);
 
-    const btn = document.getElementById('btn-download-report');
-    btn.textContent = '已下载';
-    btn.style.background = '#333';
-    setTimeout(() => { btn.textContent = '下载 Markdown'; btn.style.background = '#E5007E'; }, 2000);
+    const btn = document.getElementById('btn-download-report-header');
+    btn.textContent = '✅ 已下载';
+    setTimeout(() => { btn.textContent = '💾 下载'; }, 2000);
   }
 
   copyReport() {
     const reportText = this.reportBody.innerText;
     navigator.clipboard.writeText(reportText).then(() => {
       const btn = document.getElementById('btn-copy-report');
-      btn.textContent = '已复制';
-      setTimeout(() => { btn.textContent = '复制全文'; }, 2000);
+      btn.textContent = '✅ 已复制';
+      setTimeout(() => { btn.textContent = '📋 复制全文'; }, 2000);
     });
   }
 
