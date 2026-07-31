@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词库 Playground — 分层替换卡片测试</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, 'PingFang SC', sans-serif;
+  background: #000;
+  min-height: 100vh;
+  padding: 24px;
+  color: #fff;
+}
+h1 { font-size: 20px; margin-bottom: 4px; color: #E5007E; }
+.subtitle { color: #666; font-size: 13px; margin-bottom: 24px; }
+
+.main-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 24px;
+  max-width: 1200px;
+}
+
+.input-area { display: flex; flex-direction: column; gap: 12px; }
+textarea {
+  width: 100%;
+  min-height: 200px;
+  background: #0a0a0a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 16px;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.8;
+  resize: vertical;
+  font-family: inherit;
+  outline: none;
+}
+textarea:focus { border-color: #E5007E; }
+
+.output-area {
+  background: #0a0a0a;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 160px;
+  font-size: 16px;
+  line-height: 2;
+  word-break: break-word;
+}
+
+.highlight-vague { color: #45A020; cursor: pointer; border-bottom: 2px dashed #45A020; }
+.highlight-vague:hover { background: rgba(69,160,32,0.15); }
+.highlight-filler { color: #FFD000; text-decoration: underline wavy; }
+.highlight-hedge { color: #E5007E; }
+
+.stats-bar {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #888;
+}
+.stats-bar span { display: flex; align-items: center; gap: 4px; }
+
+/* 右侧：替换卡片 */
+.card-panel {
+  background: #0a0a0a;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 16px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+.card-panel h3 { font-size: 14px; color: #E5007E; margin-bottom: 12px; }
+.card-item {
+  background: #111;
+  border: 1px solid #1a1a1a;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.card-item .original { font-size: 14px; color: #45A020; font-weight: 600; margin-bottom: 4px; }
+.card-item .category { font-size: 11px; color: #666; margin-bottom: 6px; }
+.card-item .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #ccc;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.chip:hover { background: #E5007E; color: #fff; border-color: #E5007E; }
+
+/* 底部词库浏览器 */
+.lexicon-browser {
+  margin-top: 32px;
+  max-width: 1200px;
+}
+.lexicon-browser h3 { font-size: 16px; color: #E5007E; margin-bottom: 16px; }
+.lexicon-category {
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.lexicon-category h4 { font-size: 13px; color: #888; margin-bottom: 12px; cursor: pointer; }
+.lexicon-category .entries { display: flex; flex-wrap: wrap; gap: 8px; }
+.lexicon-entry {
+  background: #111;
+  border: 1px solid #1a1a1a;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #45A020;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.lexicon-entry:hover { border-color: #45A020; }
+.lexicon-entry .alts { color: #666; font-size: 11px; margin-top: 2px; }
+
+@media (max-width: 768px) {
+  .main-layout { grid-template-columns: 1fr; }
+  body { padding: 12px; }
+}
+</style>
+</head>
+<body>
+
+<h1>🔬 词库 Playground</h1>
+<div class="subtitle">粘贴口播稿/逐字稿，测试分层词库的检测和替换建议</div>
+
+<div class="main-layout">
+  <div>
+    <div class="input-area">
+      <textarea id="input-text" placeholder="在这里粘贴文字... 试试：我今天特别开心，然后那个就觉得这个事情做得挺好的，反正就是很开心"></textarea>
+    </div>
+    <div class="stats-bar" style="margin-top:12px;">
+      <span style="color:#45A020;">🟢 笼统词: <strong id="stat-vague">0</strong></span>
+      <span style="color:#FFD000;">🟡 填充词: <strong id="stat-filler">0</strong></span>
+      <span style="color:#E5007E;">🔴 犹豫词: <strong id="stat-hedge">0</strong></span>
+    </div>
+    <div class="output-area" id="output-area" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card-panel" id="card-panel">
+    <h3>💡 替换建议</h3>
+    <div id="card-list"></div>
+  </div>
+</div>
+
+<div class="lexicon-browser" id="lexicon-browser"></div>
+
+<script>
+// 加载分层词库
+let TIERED_LEXICON = null;
+
+async function loadLexicon() {
+  try {
+    const resp = await fetch('tiered-lexicon.json');
+    if (resp.ok) TIERED_LEXICON = await resp.json();
+    renderLexiconBrowser();
+  } catch (e) {
+    console.warn('加载词库失败:', e);
+  }
+}
+
+const FILLER_WORDS = ['嗯', '啊', '呃', '额', '那个', '就是', '然后', '这个', '对吧', '是吧', '你知道', '怎么说呢', '反正', '基本上', '总之', '所以说'];
+const HEDGE_WORDS = ['可能', '也许', '大概', '应该', '我觉得', '好像', '似乎', '或许', '不一定', '差不多', '算是', '某种程度上', '一般来说', '感觉'];
+
+function getVagueMap() {
+  if (!TIERED_LEXICON) return {};
+  const merged = {};
+  const categories = ['emotions_positive', 'emotions_negative', 'states', 'vague_descriptors', 'vague_verbs', 'intensity_markers', 'social_expressions', 'evaluation_words', 'action_words'];
+  categories.forEach(cat => {
+    if (TIERED_LEXICON[cat]) Object.assign(merged, TIERED_LEXICON[cat]);
+  });
+  return merged;
+}
+
+function getCategoryForWord(word) {
+  if (!TIERED_LEXICON) return '';
+  const cats = { emotions_positive:'正面情绪', emotions_negative:'负面情绪', states:'身体状态', vague_descriptors:'万能形容词', vague_verbs:'万能动词', intensity_markers:'程度词', social_expressions:'社交用语', evaluation_words:'评价用语', action_words:'动作用语' };
+  for (const [cat, label] of Object.entries(cats)) {
+    if (TIERED_LEXICON[cat] && TIERED_LEXICON[cat][word]) return label;
+  }
+  return '';
+}
+
+function analyze() {
+  const text = document.getElementById('input-text').value;
+  const output = document.getElementById('output-area');
+  if (!text.trim()) { output.innerHTML = ''; return; }
+
+  const vagueMap = getVagueMap();
+  const allWords = new Set([...FILLER_WORDS, ...HEDGE_WORDS, ...Object.keys(vagueMap)]);
+
+  // 分词
+  const words = [];
+  let i = 0;
+  while (i < text.length) {
+    let matched = false;
+    for (let len = Math.min(6, text.length - i); len >= 2; len--) {
+      const w = text.substring(i, i + len);
+      if (allWords.has(w)) { words.push(w); i += len; matched = true; break; }
+    }
+    if (!matched) { words.push(text[i]); i++; }
+  }
+
+  // 检测
+  const fillers = [], hedges = [], vagueWords = [];
+  words.forEach((w, idx) => {
+    if (FILLER_WORDS.includes(w)) fillers.push({ word: w, pos: idx });
+    if (HEDGE_WORDS.includes(w)) hedges.push({ word: w, pos: idx });
+    if (vagueMap[w]) vagueWords.push({ word: w, pos: idx, alts: vagueMap[w] });
+  });
+
+  // 更新统计
+  document.getElementById('stat-vague').textContent = vagueWords.length;
+  document.getElementById('stat-filler').textContent = fillers.length;
+  document.getElementById('stat-hedge').textContent = hedges.length;
+
+  // 高亮输出
+  const vagueSet = new Set(vagueWords.map(v => v.word));
+  const fillerSet = new Set(fillers.map(f => f.word));
+  const hedgeSet = new Set(hedges.map(h => h.word));
+
+  let html = text;
+  // 先标记笼统词（可点击）
+  [...vagueSet].sort((a,b) => b.length - a.length).forEach(w => {
+    html = html.replace(new RegExp(w, 'g'), `<span class="highlight-vague" data-word="${w}">${w}</span>`);
+  });
+  [...fillerSet].sort((a,b) => b.length - a.length).forEach(w => {
+    html = html.replace(new RegExp(w, 'g'), `<span class="highlight-filler">${w}</span>`);
+  });
+  [...hedgeSet].sort((a,b) => b.length - a.length).forEach(w => {
+    html = html.replace(new RegExp(w, 'g'), `<span class="highlight-hedge">${w}</span>`);
+  });
+
+  output.innerHTML = html;
+
+  // 绑定点击事件
+  output.querySelectorAll('.highlight-vague').forEach(el => {
+    el.addEventListener('click', () => showCard(el.dataset.word));
+  });
+
+  // 显示所有替换卡片
+  renderCards(vagueWords);
+}
+
+function showCard(word) {
+  const vagueMap = getVagueMap();
+  const alts = vagueMap[word];
+  if (!alts) return;
+  const category = getCategoryForWord(word);
+  const panel = document.getElementById('card-panel');
+  const list = document.getElementById('card-list');
+  list.innerHTML = `
+    <div class="card-item">
+      <div class="original">「${word}」</div>
+      <div class="category">${category}</div>
+      <div class="chips">${alts.map(a => `<span class="chip">${a}</span>`).join('')}</div>
+    </div>
+  `;
+  panel.scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderCards(vagueWords) {
+  const list = document.getElementById('card-list');
+  if (vagueWords.length === 0) {
+    list.innerHTML = '<div style="color:#666;font-size:13px;">输入文本中检测到的笼统词会在这里显示替换建议</div>';
+    return;
+  }
+  const seen = new Set();
+  list.innerHTML = vagueWords.filter(v => { if (seen.has(v.word)) return false; seen.add(v.word); return true; }).map(v => {
+    const category = getCategoryForWord(v.word);
+    return `<div class="card-item">
+      <div class="original">「${v.word}」</div>
+      <div class="category">${category}</div>
+      <div class="chips">${v.alts.slice(0, 6).map(a => `<span class="chip">${a}</span>`).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderLexiconBrowser() {
+  if (!TIERED_LEXICON) return;
+  const cats = { emotions_positive:'正面情绪', emotions_negative:'负面情绪', states:'身体状态', vague_descriptors:'万能形容词', vague_verbs:'万能动词', intensity_markers:'程度词', social_expressions:'社交用语', evaluation_words:'评价用语', action_words:'动作用语' };
+  const browser = document.getElementById('lexicon-browser');
+  browser.innerHTML = '<h3>📚 完整词库浏览器（点击词条高亮输入）</h3>' + Object.entries(cats).map(([key, label]) => {
+    const entries = TIERED_LEXICON[key] || {};
+    return `<div class="lexicon-category">
+      <h4>${label} (${Object.keys(entries).length}个词)</h4>
+      <div class="entries">${Object.entries(entries).map(([word, alts]) => 
+        `<div class="lexicon-entry" data-word="${word}">${word}<div class="alts">${alts.slice(0,3).join(' / ')}</div></div>`
+      ).join('')}</div>
+    </div>`;
+  }).join('');
+
+  browser.querySelectorAll('.lexicon-entry').forEach(el => {
+    el.addEventListener('click', () => {
+      document.getElementById('input-text').value += el.dataset.word;
+      analyze();
+    });
+  });
+}
+
+document.getElementById('input-text').addEventListener('input', () => analyze());
+loadLexicon();
+analyze();
+</script>
+</body>
+</html>
