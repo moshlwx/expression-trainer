@@ -706,6 +706,22 @@ button, input, select, textarea, .subtitle-scroll, .feedback-content, .modal-bod
   background: rgba(255, 107, 107, 0.1);
 }
 
+.history-btn-retry {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: transparent;
+  color: #ffa94d;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.history-btn-retry:hover {
+  color: #fff;
+  border-color: #ffa94d;
+  background: rgba(255, 169, 77, 0.15);
+}
+
 .history-empty {
   text-align: center;
   color: #666;

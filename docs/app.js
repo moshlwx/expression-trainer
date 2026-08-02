@@ -1603,6 +1603,9 @@ class ExpressionTrainer {
       const deleteBtn = r.status !== 'generating'
         ? `<button class="history-btn-delete" data-id="${r.id}" title="删除">🗑️</button>`
         : '';
+      const retryBtn = r.status === 'failed'
+        ? `<button class="history-btn-retry" data-id="${r.id}" title="重试">🔄</button>`
+        : '';
 
       return `
         <div class="history-item" data-id="${r.id}">
@@ -1614,6 +1617,7 @@ class ExpressionTrainer {
           <div class="history-item-right">
             <span class="history-status ${statusClass}">${statusLabel}</span>
             ${r.status === 'completed' ? `<button class="history-btn-view" data-id="${r.id}">查看</button>` : ''}
+            ${retryBtn}
             ${deleteBtn}
           </div>
         </div>`;
@@ -1624,6 +1628,12 @@ class ExpressionTrainer {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.viewReportDetail(btn.dataset.id);
+      });
+    });
+    this.historyList.querySelectorAll('.history-btn-retry').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        this.retryReport(btn.dataset.id);
       });
     });
     this.historyList.querySelectorAll('.history-btn-delete').forEach(btn => {
@@ -1646,7 +1656,10 @@ class ExpressionTrainer {
   viewReportDetail(reportId) {
     const reports = loadReports();
     const report = reports.find(r => r.id === reportId);
-    if (!report || report.status !== 'completed') return;
+    if (!report) return;
+
+    // 如果是失败状态，也允许查看（显示原文+重试按钮）
+    if (report.status === 'generating') return;
 
     this.historyList.classList.add('hidden');
     this.historyDetail.classList.remove('hidden');
@@ -1661,17 +1674,66 @@ class ExpressionTrainer {
         ${report.stats.totalWords ? `<span>📊 密度: ${((report.stats.totalWords - (report.stats.fillers || 0) - (report.stats.hedges || 0)) / report.stats.totalWords * 100).toFixed(0)}%</span>` : ''}
       </div>` : '';
 
+    const reportContent = report.status === 'completed'
+      ? `<div class="history-detail-report">${this.renderReportContent(report.report || '')}</div>`
+      : `<div style="text-align:center;padding:40px;color:#ff6b6b;">
+          <p>报告生成失败</p>
+          ${report.fullText ? `<p style="color:#666;font-size:13px;margin-top:12px;">原文: ${report.fullText.slice(0, 200)}...</p>` : ''}
+          <button class="history-btn-retry" data-id="${report.id}" style="margin-top:16px;padding:8px 20px;background:#E5007E;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🔄 重新生成</button>
+        </div>`;
+
     this.historyDetail.innerHTML = `
       <div class="history-detail-header">
         <button class="history-btn-back" id="history-btn-back">← 返回列表</button>
         <span class="history-detail-date">${report.date || '未知时间'}</span>
+        <div style="display:flex;gap:8px;margin-left:auto;">
+          ${report.status === 'completed' ? `
+            <button class="btn-sm" id="history-detail-copy">📋 复制</button>
+            <button class="btn-sm" id="history-detail-download">💾 下载</button>
+          ` : ''}
+        </div>
       </div>
       ${statsHtml}
-      <div class="history-detail-report">${this.renderReportContent(report.report || '')}</div>`;
+      ${reportContent}`;
 
     document.getElementById('history-btn-back').addEventListener('click', () => {
       this.showReportHistory();
     });
+
+    // 绑定详情页复制/下载
+    const copyBtn = document.getElementById('history-detail-copy');
+    const downloadBtn = document.getElementById('history-detail-download');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const text = (report.report || '') + '\n\n---\n\n原文:\n' + (report.fullText || '');
+        navigator.clipboard.writeText(text).then(() => {
+          copyBtn.textContent = '✅ 已复制';
+          setTimeout(() => { copyBtn.textContent = '📋 复制'; }, 2000);
+        });
+      });
+    }
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', () => {
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 10);
+        const markdown = `# 表达训练报告\n\n**日期**: ${report.date}  \n**时长**: ${(report.stats && report.stats.duration) || 0}秒  \n**总字数**: ${(report.stats && report.stats.totalWords) || 0}  \n\n---\n\n## 完整原文\n\n${report.fullText || ''}\n\n---\n\n${report.report || ''}`;
+        const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `表达训练-${dateStr}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+        downloadBtn.textContent = '✅ 已下载';
+        setTimeout(() => { downloadBtn.textContent = '💾 下载'; }, 2000);
+      });
+    }
+
+    // 绑定详情页重试按钮
+    const retryBtn = this.historyDetail.querySelector('.history-btn-retry');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => this.retryReport(reportId));
+    }
   }
 
   async deleteReportItem(reportId) {
@@ -1679,6 +1741,69 @@ class ExpressionTrainer {
     this.addFeedbackItem('🗑️ 已删除一条历史报告', 'good');
     const reports = loadReports();
     this.renderHistoryList(reports);
+  }
+
+  // 重试失败的生成报告
+  async retryReport(reportId) {
+    const reports = loadReports();
+    const report = reports.find(r => r.id === reportId);
+    if (!report || !report.fullText) {
+      this.addFeedbackItem('无法重试：缺少原始文本', 'hedge');
+      return;
+    }
+
+    // 更新状态为 generating
+    updateReport(reportId, { status: 'generating' });
+    // 刷新列表
+    this.renderHistoryList(loadReports());
+
+    // 如果在详情页，显示生成中
+    if (!this.historyDetail.classList.contains('hidden')) {
+      this.historyDetail.innerHTML = `
+        <div class="history-detail-header">
+          <button class="history-btn-back" id="history-btn-back">← 返回列表</button>
+          <span class="history-detail-date">${report.date || '未知时间'}</span>
+        </div>
+        <div style="text-align:center;padding:40px;">
+          <div style="font-size:24px;margin-bottom:12px;">⏳</div>
+          <p style="color:#ffa94d;">正在重新生成报告...</p>
+        </div>`;
+      document.getElementById('history-btn-back').addEventListener('click', () => this.showReportHistory());
+    }
+
+    // 重新生成
+    const customPrompt = loadCustomPrompt();
+    const stats = report.stats || { fillers: 0, hedges: 0, vagueWords: 0, totalWords: 0, duration: 0 };
+    const prompt = getReportPrompt(report.fullText, stats, customPrompt);
+    const messages = [
+      { role: 'system', content: prompt.system },
+      { role: 'user', content: prompt.user }
+    ];
+
+    try {
+      const result = await callAI(messages, 8192);
+      if (result) {
+        updateReport(reportId, { status: 'completed', report: result });
+        this.addFeedbackItem('报告重新生成完成', 'good');
+        // 刷新详情页
+        if (!this.historyDetail.classList.contains('hidden')) {
+          this.viewReportDetail(reportId);
+        }
+      } else {
+        updateReport(reportId, { status: 'failed' });
+        this.addFeedbackItem('报告重新生成失败', 'hedge');
+        if (!this.historyDetail.classList.contains('hidden')) {
+          this.viewReportDetail(reportId);
+        }
+      }
+    } catch (err) {
+      console.error('[重试] 生成异常:', err);
+      updateReport(reportId, { status: 'failed' });
+      this.addFeedbackItem('报告重新生成失败', 'hedge');
+    }
+
+    // 刷新列表
+    this.renderHistoryList(loadReports());
   }
 
   // Markdown → HTML 渲染（复用于报告和历史报告）
