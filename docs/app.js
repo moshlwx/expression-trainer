@@ -1806,37 +1806,18 @@ class ExpressionTrainer {
     this.renderHistoryList(loadReports());
   }
 
-  // Markdown → HTML 渲染（复用于报告和历史报告）
+  // Markdown → HTML 渲染（使用 marked 库）
   renderReportContent(reportText) {
     if (!reportText) return '';
-    let html = reportText
+    if (typeof marked !== 'undefined' && marked.parse) {
+      return marked.parse(reportText);
+    }
+    // fallback: 基本转义 + 换行
+    return reportText
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-      .replace(/^- (.+)$/gm, '<li>$1</li>')
-      .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-      .replace(/\n\n/g, '</p><p>')
       .replace(/\n/g, '<br>');
-
-    // 表格处理
-    html = html.replace(/((?:<br>)?\|[^|]+\|<br>(?:\|[^|]+\|<br>)*)/g, (match) => {
-      const rows = match.split('<br>').filter(r => r.trim());
-      const tableRows = rows.map(r => {
-        const cells = r.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-        if (cells.every(c => /^:?-+:?$/.test(c))) return '';
-        return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`;
-      }).filter(Boolean).join('');
-      return tableRows ? `<table>${tableRows}</table>` : match;
-    });
-
-    return `<p>${html}</p>`;
   }
 }
 
